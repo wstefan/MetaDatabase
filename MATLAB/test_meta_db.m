@@ -17,6 +17,7 @@ lp =db.searchFiles(8,'treatment. T-MAP RT TEMPORAL ORTHO 2 PLANE','complex=phase
 lm =db.searchFiles(8,'treatment. T-MAP RT TEMPORAL ORTHO 2 PLANE','complex=magnitude');
 hotspot=[185 140 64];  loc=1;
 
+
 % get meta tags for temperature from "phase" files
 btemp = db.getMeta(lp,'Body Temperature');
 btemp = arrayfun(@(x)cell2mat(textscan(char(x),'%f')),btemp); % convert java.lang.String[] to double

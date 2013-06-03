@@ -131,11 +131,26 @@ def edit_study():
     print "<A href=metaquery.py?menu=show_study_files&study=%s&group=yes>back</a><br>" % study 
     
     if not name=="":
-        c.execute("update studies set name=%s,description=%s,mrn=%s,modality=%s,type_id=%s,comments=%s where id=%s", (name,description,MRN,modality,type,comments,study)); 
+        c.execute("select * from studies where id=%s", study)
+        if len(c.fetchall())==0:
+            c.execute("select max(id) from studies");
+            study=int(c.fetchone()[0])+1;
+            q="insert into studies (Id,name,description,mrn,modality,type_id,comments) values (%s,%s,%s,%s,%s,%s,%s)"
+            v=                  (study,name,description,MRN,modality,type,comments)
+            print q % v
+            c.execute(q,v );
+        else:
+            c.execute("update studies set name=%s,description=%s,mrn=%s,modality=%s,type_id=%s,comments=%s where id=%s", (name,description,MRN,modality,type,comments,study)); 
       
-        
-    c.execute("select s.name,s.description,s.MRN,s.modality,s.type_id,s.comments from studies s where id=%s",study);
-    st=c.fetchone();    
+    if study=="":
+        c.execute("select max(id) from studies");
+        study=int(c.fetchone()[0])+1;
+        st=['','','','','','']        
+    else:
+        c.execute("select s.name,s.description,s.MRN,s.modality,s.type_id,s.comments from studies s where id=%s",study);
+        st=c.fetchone();    
+
+
     
     print "<h1>Edit Study:</h1>"
     print "<FORM METHOD=\"push\" action=\"metaquery.py\" method=\"post\">" 
@@ -221,7 +236,10 @@ def show_study_files():
         if len(res)>0:
             print "<tr><td colspan=4><table>"
             for e in res:
-                print "<tr><td>&nbsp;<td>%s=%s" % (e[0],e[1])   
+                if e[1].startswith('http:'):
+                    print "<tr><td>&nbsp;<td>%s=<A href=\"%s\">%s</A>" % (e[0],e[1],e[1])
+                else:
+                    print "<tr><td>&nbsp;<td>%s=%s" % (e[0],e[1])   
             print "</table>"
                 
             

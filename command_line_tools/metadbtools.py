@@ -37,12 +37,19 @@ def find_location(dir):
     c.execute("select id,parameters from external_location where type=\"local\"")
     loc=[];
     for e in c.fetchall():
+        # print "%s starts with %s" % (dir,e[1])
         if dir.startswith(e[1]):
             loc.append(e[0])
             prefix_length=len(e[1]);
-        assert len(loc)==1        
-        location=loc[0]
-        path=dir[prefix_length+1:];
+    if len(loc)>1:
+        for l in loc:
+            print "ERROR: more than one location"
+    elif len(loc)==0:
+        return (None,None)
+            
+    assert len(loc)==1        
+    location=loc[0]
+    path=dir[prefix_length+1:];
     return (location,path)       
     
 def choose_from_table(table,fields,choice=0,new_callback=None):
@@ -136,13 +143,53 @@ def list_dir(location,path,dir,prnt=True,read_dicom=False):
         else:
             if prnt:
                 try:
-                    dcm=dicom.ReadFile(filename)
+                    dcm=dicom.read_file(filename)
                     print "        {0:30}: DICOM: {1:50}".format(filename,dcm.SeriesDescription)
                 except:
                     print "        {0:30}".format(filename)
         
             
     return (file_ids,meta_ids)
+    
+    
+def makeCombQuery(file_fields,meta_fields,where='',group=False):
+    q="select %s" % file_fields[0];
+    for i in range(1,len(file_fields)):
+        q+=",%s" % file_fields[i]
+        
+    for i in range(0,len(meta_fields)):
+        s = meta_fields[i].split("=");
+        if s[0].startswith("*"):
+            s[0]=s[0][1:];
+        q+=", m%i.value as `%s` " % (i,s[0])
+            
+    q+=" from external_files f \n";
+    for i in range(0,len(meta_fields)):
+        s = meta_fields[i].split("=");
+        if s[0].startswith("*"):
+            s[0]=s[0][1:];
+            q+=" left join external_meta_info m%i on m%i.file_id=f.id and m%i.name=\"%s\" " % (i,i,i,s[0])
+        else:
+            q+=" join external_meta_info m%i on m%i.file_id=f.id and m%i.name=\"%s\" " % (i,i,i,s[0])
+            
+        if len(s)>1:
+            q+=" and m%i.value=\"%s\" " % (i,s[1])
+            
+        q+="\n"
+        
+    if not where == '':
+        q+= "where %s\n" % where
+            
+    if group:
+        q+= "group by m0.value"
+        for i in range(1,len(meta_fields)):
+            q+= ",m%i.value" % i
+        q+="\n"
+  
+  
+    return q
+   
+    
     
 cf = parse_config('/etc/metadbconfig.cfg')   
 try:

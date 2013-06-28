@@ -37,32 +37,39 @@ parser.add_option("","--header", dest="header", default="", help="add dicom head
 if len(args)==0: # No file name given: List files
     dir=os.getcwd();
     (location,path)=find_location(dir)
-    if options.remove:
-        (file_ids,meta_ids)=list_dir(location,path,dir,False)
-        # print "removing %s" % options.remove
-        if options.remove=="*":
-            for i in file_ids.keys():
-                c.execute("delete from external_files where id=%s" % file_ids[i])
-                c.execute("delete from external_meta_info where file_id=%s" % file_ids[i])
-                print "remove file %s with id %s" % ("%s" % i,file_ids[i])
-        else:
-            idx=options.remove.split(".")
-            assert len(idx)==1 or len(idx)==2        
-            if len(idx)==1:
-                c.execute("delete from external_files where id=%s" % file_ids["%s" % idx[0]])
-                c.execute("delete from external_meta_info where file_id=%s" % file_ids["%s" % idx[0]])
-                print "remove file %s with id %s" % ("%s" % idx[0],file_ids["%s" % idx[0]])
-            else:
-                ist="%s.%s" % (idx[0],idx[1])
-                c.execute("delete from external_meta_info where id=%s" % meta_ids[ist])
-                print "remove metadata %s with id %s" % (ist,meta_ids[ist])
-            
+    if location is None:
+        print "Directory not found in database"
     else:
-        list_dir(location,path,dir,prnt=True,read_dicom=True)   
+        if options.remove:
+            (file_ids,meta_ids)=list_dir(location,path,dir,False)
+            # print "removing %s" % options.remove
+            if options.remove=="*":
+                for i in file_ids.keys():
+                    c.execute("delete from external_files where id=%s" % file_ids[i])
+                    c.execute("delete from external_meta_info where file_id=%s" % file_ids[i])
+                    print "remove file %s with id %s" % ("%s" % i,file_ids[i])
+            else:
+                idx=options.remove.split(".")
+                assert len(idx)==1 or len(idx)==2        
+                if len(idx)==1:
+                    c.execute("delete from external_files where id=%s" % file_ids["%s" % idx[0]])
+                    c.execute("delete from external_meta_info where file_id=%s" % file_ids["%s" % idx[0]])
+                    print "remove file %s with id %s" % ("%s" % idx[0],file_ids["%s" % idx[0]])
+                else:
+                    ist="%s.%s" % (idx[0],idx[1])
+                    c.execute("delete from external_meta_info where id=%s" % meta_ids[ist])
+                    print "remove metadata %s with id %s" % (ist,meta_ids[ist])
+                
+        else:
+            list_dir(location,path,dir,prnt=True,read_dicom=True)   
 
 elif options.meta: # -m option given: add meta data
    dir=os.getcwd();
    (location,path)=find_location(dir)
+   if not path=="":
+       path+="/"
+       
+   #print (location,path)
    if options.header=="":
        name= raw_input('Name        : ');
        if name=="redmine_project":
@@ -72,7 +79,10 @@ elif options.meta: # -m option given: add meta data
 
    print "Adding meta data for:"
    for f in args:
-       c.execute("select f.path,s.name,f.description,a.name,f.id,f.study_id from external_files f LEFT JOIN studies s ON f.study_id=s.id LEFT JOIN access_ids a ON f.access_id=a.id where location=%s and path = \"%s/%s\" " % (location,path,f))    
+       s="select f.path,s.name,f.description,a.name,f.id,f.study_id from external_files f LEFT JOIN studies s ON f.study_id=s.id LEFT JOIN access_ids a ON f.access_id=a.id where location=%s and path = \"%s%s\" " % (location,path,f)
+       #print s        
+       c.execute(s)    
+       
        fn=c.fetchone();
        if fn is None:
            print "%s not in database. Add it to a project by calling 'metadata %s'" % (f,f)
@@ -84,13 +94,14 @@ elif options.meta: # -m option given: add meta data
                c.execute(q,v)
            else:
                 try:
-                    dcm=dicom.ReadFile(f)
+                    dcm=dicom.read_file(f)
                     h=dcm[eval("(%s)" % options.header)]
                     q = "insert into external_meta_info (study_id,file_id,name,value) values (0,%s,%s,%s)"
                     v = (fn[4],h.name,h.value)  
                     c.execute(q,v)
                 except:
-                    print " skipped, not a DICOM"       
+                    print " skipped, not a DICOM"    
+                    raise
                     
 elif options.scan:
     if args[0]==".":
@@ -126,7 +137,7 @@ elif options.scan:
             #print "%s/%s" % (dirname,filename)
             dcm=None;
             try:
-                dcm=dicom.ReadFile("%s/%s" % (dirname,filename))
+                dcm=dicom.read_file("%s/%s" % (dirname,filename))
                 h=dcm[eval("(0x8,0x103e)")]
                 c.execute("select count(*) from external_files where location=%s and path=%s", (location,"%s/%s" % (path,filename)));
                 if c.fetchone()[0]>0:

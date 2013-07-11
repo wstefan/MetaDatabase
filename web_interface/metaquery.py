@@ -40,7 +40,7 @@ def meta_query():
     meta = form.getlist('meta')    
     study = form.getfirst('study','')  
     pform = form.getfirst('pform','edit')
-    N = int(form.getfirst('nmeta','10'))
+    N = int(form.getfirst('nmeta','10')) # number of meta fields in edit mode
     order = int(form.getfirst('order','-1'))
     if pform=="edit":
         print """<!DOCTYPE html>"""
@@ -103,11 +103,13 @@ def meta_query():
             print "<FORM METHOD=\"push\" action=\"metaquery.py\">" 
             print "<input type=\"hidden\" name=\"menu\" value=meta_query>"
             print "<input type=\"hidden\" name=\"study\" value=%s>" % study 
+            print "<input type=\"hidden\" name=\"order\" value=%s>" % order 
             for m in meta:
                 print "<input type=\"hidden\" name=\"meta\" value=\"%s\">" % m
             print "<td>format:<td><select name=\"pform\">"
             print '  <option value=html>HTML</option>'
             print '  <option value=csv selected>csv</option>'
+            print '  <option value=graph selected>graph</option>'
             print '  <option value=edit selected>edit query</option>' 
             print '</select>'
             print '<td><input type="submit" value="Go"></FORM></table>'
@@ -132,7 +134,156 @@ def meta_query():
                         print "\"%s\"" % d, 
                         first=False;
                 print
+        elif pform=='graph':  
+            import matplotlib
+            matplotlib.use('Agg')
+            from PIL import Image
+            import matplotlib.pyplot as plt
+            import numpy as np
+            import cStringIO
+            
+            xaxis = form.getfirst('xaxis','1')
+            yaxis = form.getlist('yaxis')
+        
+            if len(yaxis)==0:
+                yaxis= (len(meta),)
+            
+            data=c.fetchall()            
+            dplot=np.zeros((len(data),len(yaxis))) 
+            xticks=[]
+            for i in range(len(data)):
+                xticks.append(data[i][int(xaxis)])
+                for j in range(len(yaxis)):
+                    dplot[i,j]=float(data[i][int(yaxis[j])])
+                
+            fig=plt.figure(figsize=(10,5))
+            plot1= fig.add_subplot ( 111 )
+            x=range(len(data))
+            plot1.plot(x,dplot)
+            sp=int(np.floor(len(data)/20));
+            xl=x[0::sp]; xl[-1]=x[-1]
+            xt=xticks[0::sp]; xt[-1]=xticks[-1];
+            
+            plt.xticks(xl,xt,size=8,rotation=45)
+#            plt.ylim([-50, 50])
+            plt.xlabel("%s" % meta[int(xaxis)])
+            yl="";
+            leg=[];
+            for y in yaxis:
+                yl+=" "+meta[int(y)-1]
+                leg.append(meta[int(y)-1])
+                
+            plt.legend(leg,loc=3)
+            plt.title("%s" % yl)
+            I=fig2img(fig); 
+            f = cStringIO.StringIO()
+            I.save(f, "PNG")
+            f.seek(0)
+            im_data=f.read()
+            
+#            print "Content-Type: text/text"     
+#            print
+#            print str(dplot)
+      
+            print "Content-type: image/png\n"    
+            print im_data
 
+def fig2data ( fig ):
+    """
+    @brief Convert a Matplotlib figure to a 4D numpy array with RGBA channels and return it
+    @param fig a matplotlib figure
+    @return a numpy 3D array of RGBA values
+    """
+    # draw the renderer
+    import numpy as np;
+    fig.canvas.draw ( )
+ 
+    # Get the RGBA buffer from the figure
+    w,h = fig.canvas.get_width_height()
+    buf = np.fromstring ( fig.canvas.tostring_argb(), dtype=np.uint8 )
+    buf.shape = ( w, h,4 )
+ 
+    # canvas.tostring_argb give pixmap in ARGB mode. Roll the ALPHA channel to have it in RGBA mode
+    buf = np.roll ( buf, 3, axis = 2 )
+    return buf
+                
+            
+
+def fig2img ( fig ):
+    from PIL import Image
+    """
+    @brief Convert a Matplotlib figure to a PIL Image in RGBA format and return it
+    @param fig a matplotlib figure
+    @return a Python Imaging Library ( PIL ) image
+    """
+    # put the figure pixmap into a numpy array
+    buf = fig2data ( fig )
+    w, h, d = buf.shape
+    return Image.fromstring( "RGBA", ( w ,h ), buf.tostring( ) )    
+    
+            
+def make_image(dcm,level='',win='',size=None):
+    #import Image, ImageDraw
+    from PIL import Image
+    import numpy as np
+    
+    I=dcm.pixel_array.astype('float');              # Get image from dicom
+    try:
+        I=I+float(dcm.RescaleIntercept);
+    except:
+        pass
+    # window image   
+    
+    if level == '':        
+        try:
+            I=I-float(dcm.WindowCenter);
+            win=dcm.WindowWidth;
+            I=np.minimum(np.maximum(I,-float(win)/2),float(win)/2)  
+        except:
+            pass
+
+    else:
+        I=I-float(level);
+        I=np.minimum(np.maximum(I,-float(win)/2),float(win)/2)                                 # Normalize intensity 
+
+    if not size is None: 
+        try:
+            from scipy.signal import *
+            I=scipy.signal.resample(I, float(size),axis=0);
+            I=scipy.signal.resample(I, float(size),axis=1);
+        except:
+            pass
+
+    #normalize to display
+    I=I-np.amin(I);                                 # Normalize intensity 
+    I=I/np.amax(I);
+    return Image.fromarray((I*255).astype('uint8'))
+
+def getDICOMImage():
+    import cStringIO
+    file_id = form.getfirst('file_id','')
+    size = form.getfirst('size',None)
+    wl = cgi.escape(form.getfirst('WL',''))
+    ww = cgi.escape(form.getfirst('WW',''))
+
+#    import matplotlib
+#    matplotlib.use('Agg')
+#    import matplotlib.pyplot as plt
+    
+    c.execute("select concat(l.parameters,'/',f.path) as path from external_files f join external_location l on l.id=f.location and f.id=%s;" , file_id )
+    path=c.fetchone()[0]
+
+    dcm=dicom.read_file(path);
+    I=make_image(dcm,wl,ww,size)
+    f = cStringIO.StringIO()
+    I.save(f, "PNG")
+    f.seek(0)
+    im_data=f.read()
+
+    print "Content-type: image/png\n"    
+    print im_data
+ 
+    
 
 def list_studies():
     c.execute("select s.name,s.description,s.id from studies s LEFT JOIN modality_ids m ON m.id=s.modality LEFT JOIN study_ids t on s.type_id=t.id group by s.id")
@@ -248,7 +399,7 @@ def send_to_dicom_node():
 
 def get_meta_query(study,query,grp=''):
     # get sql query string for a query in a study including grouping
-    q1="select f.study_id,l.parameters,f.path,f.description,t.name,a.name,f.id"
+    q1="select f.study_id,l.parameters,f.path,f.description,t.name,a.name,f.id,f.content_type"
     q2="LEFT JOIN content_types t ON f.content_type=t.id LEFT JOIN external_location l on l.id=f.location left join access_ids a on a.id=f.access_id"
     if grp=="":
         q1+=",1"
@@ -535,7 +686,11 @@ def show_study_files():
     print "<option value=\"\">all files"
     print "<option value=\"yes\">file description"
     for key in c.fetchall():
-        print "<option value=\"%s\">%s" % ( key[0],key[0])
+        if grp==key[0]:
+            print "<option selected value=\"%s\">%s" % ( key[0],key[0])
+        else:
+            print "<option value=\"%s\">%s" % ( key[0],key[0])
+            
     print "</select>"    
     print '<input type="submit" value="Group Files"></FORM>'
     
@@ -544,26 +699,59 @@ def show_study_files():
     c.execute(q)
     files=c.fetchall();
 
-
+    N=min(20,len(files))  
     print "<h2>Results:</h2>";
+    print "showing %i / %i" % (N,len(files))
     print "<table bgcolor=white>"
-    print "<tr bgcolor=#DDDDDD><th>Count<th>File name<th>Description<th>Type<th>Access restrictions"    
-    for f in files:          
-        print "<tr  bgcolor=#EEEEEE><td>{0}<td>{1}/{2:100}<td>{3:50}<td>{4:40}<td>{5:40}".format(f[7],f[1],f[2],f[3],f[4],f[5])
+    print "<tr bgcolor=#DDDDDD><th>Count<th>File name<th>Description<th>Type<th>Access restrictions<th>Thumbnail" 
+    i=0;
+    for f in files[0:N]: 
+        i=i+1;         
+        print "<tr  bgcolor=#EEEEEE><td>{0}<td>{1}/{2:100}<td>{3:50}<td>{4:40}<td>{5:40}".format("%i" % (f[8]),f[1],f[2],f[3],f[4],f[5])
+        if float(f[7])==2:
+            print "<td><A href=\"http:metaquery.py?menu=getDICOMImage&file_id=%s&pform=PNG\"><image src=\"http:metaquery.py?menu=getDICOMImage&file_id=%s&pform=PNG&size=100\"></A>"% (f[6],f[6])
+            
         c.execute("select name,value,id from external_meta_info where file_id=%s" % (f[6]))
         res=c.fetchall();
         if len(res)>0:
             print "<tr><td colspan=4><table>"
+            
             for e in res:
                 if e[1].startswith('http:'):
                     print "<tr><td>&nbsp;<td>%s=<A href=\"%s\">%s</A>" % (e[0],e[1],e[1])
                 else:
-                    print "<tr><td>&nbsp;<td>%s=%s" % (e[0],e[1])   
-            print "</table>"
+                    print "<tr><td>"
+                    print "<table><tr><td><FORM METHOD=\"push\" action=\"metaquery.py\">" 
+                    print "<input type=\"hidden\" name=\"menu\" value=show_study_files>"
+                    print "<input type=\"hidden\" name=\"study\" value=%s>" % study
+                    print "<input type=\"hidden\" name=\"query\" value=\"%s\">" % query
+                    print "<input type=\"hidden\" name=\"group\" value=\"%s\">" % (e[0]) 
+                    print '<input type="submit" value="Group"></FORM>'
+                    print "<td><FORM METHOD=\"push\" action=\"metaquery.py\">" 
+                    print "<input type=\"hidden\" name=\"menu\" value=show_study_files>"
+                    print "<input type=\"hidden\" name=\"study\" value=%s>" % study
+                    print "<input type=\"hidden\" name=\"group\" value=\"%s\">" % grp
+                    print "<input type=\"hidden\" name=\"query\" value=\"%s=%s\">" % (e[0],e[1]) 
+                    print '<input type="submit" value="filter"></FORM>'
+                    print "<td><FORM METHOD=\"push\" action=\"metaquery.py\" target=\"_blank\">" 
+                    print "<input type=\"hidden\" name=\"menu\" value=meta_query>"
+                    print "<input type=\"hidden\" name=\"study\" value=%s>" % study
+                    print "<input type=\"hidden\" name=\"order\" value=\"0\">" 
+                    print "<input type=\"hidden\" name=\"meta\" value=\"*Series Date\">" 
+                    print "<input type=\"hidden\" name=\"meta\" value=\"%s\">" % query 
+                    print "<input type=\"hidden\" name=\"meta\" value=\"%s\">" % e[0] 
+                    print "<input type=\"hidden\" name=\"pform\" value=\"html\">" 
+                    print '<input type="submit" value="table"></FORM>'
+                    print "</table>";
+                    
                 
+                    print "<td>%s=%s" % (e[0],e[1])           
+            print "</table>"
+
             
     print "</table>"
-                
+    if N<len(files):
+        print "<b>!!! More results are supressed.!!!</b>"                  
 
 def get_study_list():
     c.execute("select id,name,description from studies")
@@ -621,6 +809,9 @@ try:
         add_meta_from_DICOM() 
     elif menu == "meta_query":    
         meta_query()    
+    elif menu == "getDICOMImage":  
+        getDICOMImage()
+        
     elif menu == "send_to_dicom_node":
         send_to_dicom_node()
     else:

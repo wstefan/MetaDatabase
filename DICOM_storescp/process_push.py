@@ -30,22 +30,27 @@ def getAutoDest(dcm):
             go=True;
             for r in auto_rules:
                tag = r[0].split(":")
-               dtag=dcm[eval("(%s)" % tag[1])]
-               if r[1].startswith("=~"):
-                   v=r[1][2:];
-                   p=re.compile(v);
-                   result= p.match(dtag.value) is not None
-                   #print "%s: %s =~ %s (%s)" % (dtag.name,dtag.value,v,result) 
+               try:
+                   dtag=dcm[eval("(%s)" % tag[1])]
+                   if r[1].startswith("=~"):
+                       v=r[1][2:];
+                       p=re.compile(v);
+                       result= p.match(dtag.value) is not None
+                       print "%s: %s =~ %s (%s)" % (dtag.name,dtag.value,v,result) 
+                       
+                   else:
+                       v=r[1][1:];
+                       result=dtag.value==v
+                       print "%s: %s = %s (%s) " % (dtag.name,dtag.value,v,result)
+               
+                   if len(tag)==2 or tag[2]=="and":
+                       go = go and result
+                   elif tag[2]=="or":
+                       go = go or result
                    
-               else:
-                   v=r[1][1:];
-                   result=dtag.value==v
-                   #print "%s: %s = %s (%s) " % (dtag.name,dtag.value,v,result)
-           
-               if len(tag)==2 or tag[2]=="and":
-                   go = go and result
-               elif tag[2]=="or":
-                   go = go or result
+               except:
+                   go=False;
+                   
         else:
             go=False
         
@@ -111,6 +116,7 @@ while(go):
            if not os.path.exists("%s/%s/%s" % (sloc,stuid,seuid)):
             os.system("mkdir %s/%s/%s" % (sloc,stuid,seuid));
     
+           os.system("chmod a+rw %s/import/%s" % (sloc,filename))
            os.system("mv %s/import/%s %s/%s/%s/" % (sloc,filename,sloc,stuid,seuid));
            filename="%s/%s/%s/%s" % (spath,stuid,seuid,filename);    
 

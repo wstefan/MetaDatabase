@@ -248,11 +248,11 @@ def make_image(dcm,level='',win='',size=None):
 
     if not size is None: 
         try:
-            from scipy.signal import *
-            I=scipy.signal.resample(I, float(size),axis=0);
-            I=scipy.signal.resample(I, float(size),axis=1);
+            from scipy.signal import resample
+            I=resample(I, float(size),axis=0);
+            I=resample(I, float(size),axis=1);
         except:
-            pass
+            raise
 
     #normalize to display
     I=I-np.amin(I);                                 # Normalize intensity 
@@ -302,7 +302,7 @@ def DICOM_in_box():
     c.execute("select id,name from studies");
     studies=c.fetchall();    
     
-    s=makeCombQuery(('f.id','f.path','count(*)'),('*Study Description','*Study Instance UID'),group=True,where='f.study_id=17')
+    s=makeCombQuery(('f.id','f.path','count(*)'),('*Study Description','*Study Instance UID','*Series Date'),group=True,where='f.study_id=17')
     #print "<pre>%s</pre>" % s
     c.execute(s)
     st=c.fetchall();
@@ -310,11 +310,22 @@ def DICOM_in_box():
     print "<tr bgcolor=white><th>#files<th>Study Description<th>Study UID"
     for e in st:
         print "<tr bgcolor=white><td>%s<td>%s<td>%s" % (e[2],e[3],e[4])
-        s=makeCombQuery(('f.id','f.description','count(*)'),('Study Instance UID=%s' % str(e[4]), ),group=False)
+        s=makeCombQuery(('f.id','f.description','count(*)'),('Study Instance UID=%s' % str(e[4]),'Series Date=%s' % str(e[5])),group=False,where='f.study_id=17')
+        #print "<pre>%s</pre>" % s
         c.execute("%s group by f.description" %s )
         print "<tr bgcolor=white><td><td colspan=2><table bgcolor=white>"
         for f in c.fetchall():
-            print "<td>%s" % f[1]
+            print "<td>%s, " % f[1]
+        print "</table>"
+        s=makeCombQuery(('f.id','f.description'),('Study Instance UID=%s' % str(e[4]),'Series Date=%s' % str(e[5])),group=False,where='f.study_id=17')        
+        c.execute("%s limit 21" % s )
+        r=c.fetchall()
+        print "<tr bgcolor=white><td><td colspan=2><table bgcolor=white><td>"
+        l=min(21,len(r))
+        for f in r[0:l]:
+            print "<A href=\"http:metaquery.py?menu=getDICOMImage&file_id=%s&pform=PNG\"><image src=\"http:metaquery.py?menu=getDICOMImage&file_id=%s&pform=PNG&size=100\"></A>"% (f[0],f[0])
+        if len(r)>20:
+            print "..."
         print "</table>"
         print "<tr bgcolor=white><td><td colspan=2>"
         print "<table><tr><td>Move to study: "

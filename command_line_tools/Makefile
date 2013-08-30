@@ -3,7 +3,7 @@ install_dir=/opt/metadbtools
 mysql_server = 172.30.205.56
 mysql_db = redmine_default
 mysql_user = metauser
-mysql_password = 8hO1jKO8Vj3s23l
+mysql_password = xxxxxxxxx
 bin_dir = /usr/bin
 python_dir = /usr/bin/python
 

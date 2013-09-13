@@ -586,15 +586,135 @@ def edit_study():
     print "<tr><td valign=top>Comments:<td><textarea name=\"comments\" cols=\"150\" rows=\"30\">%s</textarea>" % st[5]
     print '<tr><td><td><input type="submit" value="Update"></table></FORM>'
     print "</table></form>"
+    print "</body>"
+    print "</html>"
+
+
+def update_meta_value():
+    print """<!DOCTYPE html>"""
+    print
+    id = form.getfirst('id','')
+    value  = form.getfirst('value','')
+    c.execute("update external_meta_info set value=%s where id=%s",(value,id))
+    print value
+
+def delete_meta_value():
+    print """<!DOCTYPE html>"""
+    print
+    id = form.getfirst('id','')
+    c.execute("delete from external_meta_info where id=%s",(id))
+    print "ok"
 
     
-        
-        
+
+def add_meta_value_to_study():
+    print """<!DOCTYPE html>"""
+    print
+    study_id = form.getfirst('study_id','')
+    name  = form.getfirst('name','')
+    value  = form.getfirst('value','')
+    c.execute("insert into external_meta_info (study_id,name,value) values (%s,%s,%s)",(study_id,name,value))
+    print "ok"
+            
         
 def show_study_files():
     print """<!DOCTYPE html>"""
     print
+    print "<html>"
+    print """<head>
+<script>
+function edit_study_meta(i)
+{
+    val=document.getElementById("study_meta_"+i.toString()).innerHTML;
+    document.getElementById("study_meta_"+i.toString()).innerHTML="<input id=\\"study_meta_input_"+i+"\\" type=\\"text\\" id=\\"edit_study_meta_"+i.toString()+"\\" value=\\""+val+"\\">";
+    document.getElementById("study_meta_button_"+i.toString()).innerHTML="<button type=\\"button\\" onclick=\\"update_study_meta("+i+")\\">update</button>";
+   
+}
+</script>
+<script>
+function add_study_meta()
+{
+    name=document.getElementById("new_study_meta_name").value;
+    value=document.getElementById("new_study_meta_value").value;
+    study_id=document.getElementById("new_study_meta_id").value;
     
+var xmlhttp;
+if (window.XMLHttpRequest)
+  {// code for IE7+, Firefox, Chrome, Opera, Safari
+  xmlhttp=new XMLHttpRequest();
+  }
+else
+  {// code for IE6, IE5
+  xmlhttp=new ActiveXObject("Microsoft.XMLHTTP");
+  }
+xmlhttp.onreadystatechange=function()
+  {
+  if (xmlhttp.readyState==4 && xmlhttp.status==200)
+    {
+        window.location.reload();
+    }
+  }
+  
+xmlhttp.open("GET","metaquery.py?menu=add_meta_value_to_study&study_id="+study_id+"&name="+encodeURIComponent(name)+"&value="+encodeURIComponent(value),true);
+xmlhttp.send();
+}
+</script>
+<script>
+function delete_study_meta(id)
+{
+    
+var xmlhttp;
+if (window.XMLHttpRequest)
+  {// code for IE7+, Firefox, Chrome, Opera, Safari
+  xmlhttp=new XMLHttpRequest();
+  }
+else
+  {// code for IE6, IE5
+  xmlhttp=new ActiveXObject("Microsoft.XMLHTTP");
+  }
+xmlhttp.onreadystatechange=function()
+  {
+  if (xmlhttp.readyState==4 && xmlhttp.status==200)
+    {
+        window.location.reload();
+    }
+  }
+  
+xmlhttp.open("GET","metaquery.py?menu=delete_meta_value&id="+id,true);
+xmlhttp.send();
+}
+</script>
+<script>
+function update_study_meta(i)
+{
+    str=document.getElementById("study_meta_input_"+i).value;
+    id=document.getElementById("study_meta_id_"+i).value;
+    
+var xmlhttp;
+if (window.XMLHttpRequest)
+  {// code for IE7+, Firefox, Chrome, Opera, Safari
+  xmlhttp=new XMLHttpRequest();
+  }
+else
+  {// code for IE6, IE5
+  xmlhttp=new ActiveXObject("Microsoft.XMLHTTP");
+  }
+xmlhttp.onreadystatechange=function()
+  {
+  if (xmlhttp.readyState==4 && xmlhttp.status==200)
+    {
+        document.getElementById("study_meta_"+i.toString()).innerHTML=xmlhttp.responseText;
+        document.getElementById("study_meta_button_"+i.toString()).innerHTML="<button type=\\"button\\" onclick=\\"edit_study_meta("+i+",this.value)\\">edit</button>";  
+    }
+  }
+  
+xmlhttp.open("GET","metaquery.py?menu=update_meta_value&id="+id+"&value="+encodeURIComponent(str),true);
+xmlhttp.send();
+}
+</script>
+</head>
+<body>
+"""
     study = form.getfirst('study','')
     grp = form.getfirst('group','')
     query = form.getfirst('query','')
@@ -602,7 +722,9 @@ def show_study_files():
     c.execute("select s.name,s.description,s.id,s.mrn,m.name,t.name,s.comments from studies s LEFT JOIN modality_ids m ON m.id=s.modality LEFT JOIN study_ids t on s.type_id=t.id where s.id=%s" % (study) )
     st=c.fetchone();
     print "<A href=metaquery.py>New search</A><br><br>"
-    print "<h1>Study:</h1>"
+    
+    print "<table border=0><tr><td valign=top>"
+    print "<h2>Study:</h2>"
     print "<table bgcolor=gray>"
     print "<tr bgcolor=white><td><b>ID:</b><td>%s" % st[2] 
     print "<tr bgcolor=white><td><b>Name:</b><td>%s" % st[0]
@@ -613,6 +735,33 @@ def show_study_files():
     print "<tr bgcolor=white><td valign=top><b>Comments:</b><td><pre>%s</pre>" % st[6]
     print "</table>"
     print "<A href=metaquery.py?menu=edit_study&study=%s>edit</a><br><br>" % study
+    print "<td valign=top>"
+    print "<h2>Meta Data:</h2>"
+    c.execute("select m.name,m.value,m.id from external_meta_info m where m.study_id=%s" % (study) )
+    st=c.fetchall();
+    print "<table bgcolor=gray>"
+    i=0;
+    for e in st:
+        i+=1;
+        print '<tr bgcolor=white><td>%s<td><div id="study_meta_%i">%s</div><td><div id="study_meta_button_%i"><button type="button" onclick="edit_study_meta(%i)">edit</button></div><div><input type="hidden" id="study_meta_id_%i" value="%s"></div>' % (e[0],i,e[1],i,i,i,e[2])
+        print '<td><button type="button" onclick="delete_study_meta(%s)">del</button>' % e[2]
+    print '<tr bgcolor=white><td><input id="new_study_meta_name" type="text">'
+    print '<td><input id="new_study_meta_value" type="text">'
+    print '<input id="new_study_meta_id" type="hidden" value=%s>' % study
+    print '<td><button type="button" onclick="add_study_meta()">add</button><td>'
+    print "</table>"
+    print "<h3>Auto routing:</h3>"
+    print """Use for example
+    <table bgcolor=gray><tr bgcolor=white><td>route:0x18x0x1030<td>=~.*text.*
+    <tr bgcolor=white><td>route:0x18x0x103e:and<td>=~.*other text.*
+    </table>
+    to automatically route images to this study.<br>Use for example:
+     <table bgcolor=gray><tr bgcolor=white><td>addtag:<td>0x10,0x20
+    </table>    
+    to automatically add DICOM tags to the meta data when automatically routed to this study.
+    """
+    
+    print "</table>"    
     
     print "<h2>Tools:</h2>"
     
@@ -822,9 +971,15 @@ try:
         meta_query()    
     elif menu == "getDICOMImage":  
         getDICOMImage()
-        
+    elif menu == "update_meta_value":
+        update_meta_value()
     elif menu == "send_to_dicom_node":
         send_to_dicom_node()
+    elif menu == "add_meta_value_to_study":
+        add_meta_value_to_study()
+    elif menu == "delete_meta_value":
+        delete_meta_value()
+        
     else:
         print "unknown menu selection"
     

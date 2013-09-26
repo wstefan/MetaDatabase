@@ -19,6 +19,7 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from metadbtools import *
 import ast
+import urllib
 
 def main_menu():
     print """<!DOCTYPE html>"""
@@ -490,7 +491,20 @@ def search_meta_db():
         print "<tr>Search:<td><input type=\"text\" name=query>"
         print '<tr><td><input type="submit" value="Go"></table></FORM>'
     else:
-        c.execute("select s.name,s.description,s.id from studies s LEFT JOIN modality_ids m ON m.id=s.modality LEFT JOIN study_ids t on s.type_id=t.id where s.description like \"%%%s%%\" or s.name like \"%%%s%%\" or m.name like \"%%%s%%\" or t.name like \"%%%s%%\"" % (query,query,query,query))
+        q="""select s.name,s.description,s.id from studies s 
+                LEFT JOIN modality_ids m ON m.id=s.modality 
+                LEFT JOIN study_ids t on s.type_id=t.id
+                LEFT JOIN external_meta_info me on me.study_id=s.id
+                where s.description like "%%%s%%" 
+                    or s.name like "%%%s%%"
+                    or m.name like "%%%s%%"
+                    or t.name like "%%%s%%"
+                    or me.name like "%%%s%%"  
+                    or me.value like "%%%s%%"
+                    or s.comments like "%%%s%%"
+                GROUP BY s.id
+        """
+        c.execute(q % (query,query,query,query,query,query,query))
         st=c.fetchall();
         print "<A href=metaquery.py>New search</A><br><br>"
         print "<h2>Studies:</h2>"
@@ -507,7 +521,21 @@ def search_meta_db():
             print "</table>" 
             
         print "<h2>Files:</h2>"   
-        c.execute("select f.study_id,l.parameters,f.path,f.description,t.name from external_files f LEFT JOIN content_types t ON f.content_type=t.id LEFT JOIN external_location l on l.id=f.location where f.description like \"%%%s%%\" or f.path like \"%%%s%%\"  or t.name like \"%%%s%%\"  %s order by f.study_id" % (query,query,query,group))
+        q="""select f.study_id,l.parameters,f.path,f.description,t.name from external_files f 
+                        LEFT JOIN content_types t ON f.content_type=t.id 
+                        LEFT JOIN external_location l on l.id=f.location
+                        LEFT JOIN external_meta_info m on f.id=m.file_id
+                        where f.description like "%%%s%%" 
+                            or f.path like "%%%s%%"  
+                            or t.name like "%%%s%%"  
+                            or m.name like "%%%s%%"  
+                            or m.value like "%%%s%%"  
+                            %s 
+                            order by f.study_id
+                        """
+                            
+        #print "<pre>%s</pre>" % (q % (query,query,query,query,query,group))
+        c.execute(q % (query,query,query,query,query,group))
         files= c.fetchall()
         if len(files)==0:
             print "no files found"
@@ -867,10 +895,10 @@ xmlhttp.send();
     i=0;
     for f in files[0:N]: 
         i=i+1;         
-        print "<tr  bgcolor=#EEEEEE><td>{0}<td>{1}/{2:100}<td>{3:50}<td>{4:40}<td>{5:40}".format("%i" % (f[8]),f[1],f[2],f[3],f[4],f[5])
+        print "<tr  bgcolor=#EEEEEE><td>{0}<td>{1}/{2:100}<br>file_id={6:50}<td>{3:50}<td>{4:40}<td>{5:40}".format("%i" % (f[8]),f[1],f[2],f[3],f[4],f[5],f[6])
         if float(f[7])==2:
             print "<td><A href=\"http:metaquery.py?menu=getDICOMImage&file_id=%s&pform=PNG\"><image src=\"http:metaquery.py?menu=getDICOMImage&file_id=%s&pform=PNG&size=100\"></A>"% (f[6],f[6])
-            
+        print "<tr><td colspan=4><a href=http://10.115.10.160/cgi-bin/analyse_phantom.sh?%s>Run phantom analysis</a>" % urllib.urlencode({'menu':'make_report','dbfile':str(f[6])})    
         c.execute("select name,value,id from external_meta_info where file_id=%s" % (f[6]))
         res=c.fetchall();
         if len(res)>0:

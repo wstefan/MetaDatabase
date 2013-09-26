@@ -146,8 +146,12 @@ while(go):
        for studyid in studyids:
            print "adding %s to study %s" % (filename,studyid)
         
-           q = "insert into external_files (created_on,study_id,version,author_id,location,path,description,access_id,content_type) values (%s,%s,%s,%s,%s,%s,%s,%s,%s)"
-           v = (now,studyid,1,authorid,location,filename,description,access,type)    
+           q = """insert into external_files 
+           (created_on,study_id,version,author_id,location,path,description,access_id,content_type,StudyUID,SeriesUID) 
+           values (%s,%s,%s,%s,%s,%s,%s,%s,%s)"""
+           StudyUID=dcm[(0x20,0xd)].value;
+           SeriesUID=dcm[(0x20,0x10)].value;
+           v = (now,studyid,1,authorid,location,filename,description,access,type,StudyUID,SeriesUID)    
            # print "%s" % (q % v)
            if not simulate:
                c.execute(q,v)

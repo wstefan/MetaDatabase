@@ -1,7 +1,7 @@
 %mksqlite('close')
 clear java
 close all
-if 0
+if 1
     addpath('../../MATLAB/libs/mksqlite')
     addpath('../../MATLAB/libs/mksqlite')
     javaaddpath('.')
